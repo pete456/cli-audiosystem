@@ -1,5 +1,5 @@
 SOURCEFILES = main.c
-EXECUTABLE = cli-recorder
+EXECUTABLE = cli-audioprocessor
 LIBS = -lasound -lm
 
 all: $(SOURCEFILES)

@@ -9,3 +9,12 @@ Converts input or output to flac
 -r=samplerate
 -b=bitdepth
 -l=channels
+
+TODO
+Update README 
+ - arguments
+ - description
+Bit depth arg parsing
+Make size of buffer dynamic(131)
+Debug macro
+modify write statement to support capture

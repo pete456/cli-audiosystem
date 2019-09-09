@@ -6,14 +6,12 @@
 
 #include <alsa/asoundlib.h>
 
-#define ALSA_PCM_NEW_HW_PARAMS_API
-
 #define DEFAULT_CHANNELS 2
 #define DEFAULT_SAMPLE_RATE 48000
 #define DEFAULT_BITDEPTH SND_PCM_FORMAT_S16_LE 
 #define DEFAULT_PERIOD_SIZE 1024;
 
-struct signal_config{
+struct signal_config {
 	unsigned int samplerate;
 	snd_pcm_uframes_t periodsize;
 	int channels;
@@ -77,6 +75,26 @@ int parse_args(struct signal_config* sc, int argc, char* argv[])
 	return 0;
 }
 
+int capture_audio(int err)
+{
+	err = snd_pcm_readi(sc->pcmhandle,buf,sc->periodsize);
+	//write();
+	return 0;
+}
+
+int playback_audio(struct signal_config* sc, int err, char* buf, int size)
+{
+	err = read(0,buf,size);
+	if(err == 0) {
+		printf("End of file on input\n");
+		return -1;
+	} else if(err != size) {
+		printf("Short read: read %d bytes\n",err);
+	}
+	err = snd_pcm_writei(sc->pcmhandle,buf,sc->periodsize);
+	return 0;
+}
+
 int main(int argc, char* argv[])
 {
 	struct signal_config* sc = init_signal_config();
@@ -136,15 +154,12 @@ int main(int argc, char* argv[])
 	printf("Buffer Size = %d frames\n",sc->samplerate);
 	
 	while(1) {
-		err = read(0,buf,size);
-
-		if(err == 0) {
-			printf("End of file on input\n");
-			break;
-		} else if(err != size) {
-			printf("Short read: read %d bytes\n",err);
-		}
-		err = snd_pcm_writei(sc->pcmhandle,buf,sc->periodsize);
+		if(sc->pcmdir == SND_PCM_STREAM_CAPTURE) {
+		} else if(sc->pcmdir == SND_PCM_STREAM_PLAYBACK) {
+			if(playback_audio(sc,err,buf,size) < 0) {
+				exit(1);
+			}
+		}		
 	}
 	
 	if((err = snd_pcm_drain(sc->pcmhandle)) < 0) {
