@@ -1,0 +1,11 @@
+-p
+Reads from stdin and writes to ALSA buffer
+-c
+Reads from ALSA buffer and writes to stdout
+
+-f
+Converts input or output to flac 
+
+-r=samplerate
+-b=bitdepth
+-l=channels
