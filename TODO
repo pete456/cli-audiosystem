@@ -12,7 +12,6 @@ Converts input or output to flac
 
 TODO
 Update README 
- - arguments
  - description
 Bit depth arg parsing
 Make size of buffer dynamic(131)

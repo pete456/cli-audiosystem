@@ -22,6 +22,79 @@ struct signal_config {
 	int dir;
 };
 
+/* Prints out alsa hw params. */
+void alsa_info(struct signal_config* sc);
+/* Reads from the hw buffer and writes to stdout. */
+int capture_audio(struct signal_config* sc, char* buf, int size);
+/* Populates the alsa hw params struct. */
+int configure_alsa(struct signal_config* sc);
+/* Fills a new signal_config struct with DEFINE values. */
+struct signal_config* init_signal_config();
+/* Sets values in signal config struct with values from argv. */
+int parse_args(struct signal_config* sc, int argc, char* argv[]);
+/* Reads values from stdin and writes to hardware buffer. */
+int playback_audio(struct signal_config* sc, char* buf, int size);
+
+void alsa_info(struct signal_config* sc)
+{
+	snd_pcm_hw_params_get_rate(sc->hwparams,&(sc->samplerate),&(sc->dir));
+	printf("Rate = %d bps\n",sc->samplerate);
+
+	snd_pcm_hw_params_get_periods(sc->hwparams,&(sc->samplerate), &(sc->dir));
+	printf("Periods = %d\n",sc->samplerate);
+
+	snd_pcm_hw_params_get_period_time(sc->hwparams,&(sc->samplerate),&(sc->dir));
+	printf("Period time =  %d microseconds\n",sc->samplerate);
+
+  	snd_pcm_hw_params_get_period_size(sc->hwparams,&(sc->periodsize), &(sc->dir));
+  	printf("period size = %d frames\n", (int)sc->periodsize);
+}
+
+int capture_audio(struct signal_config* sc, char* buf, int size)
+{
+	int err;
+	err = snd_pcm_readi(sc->pcmhandle,buf,sc->periodsize);
+	//write();
+	return 0;
+}
+
+int configure_alsa(struct signal_config* sc)
+{
+	int err;
+	if((err = snd_pcm_open(&(sc->pcmhandle), "default", sc->pcmdir, 0)) < 0) {
+		fprintf(stderr,"Cannot open audio device %s\n",snd_strerror(err));
+		return -1;
+	} else {
+		printf("pcm is open\n");
+	}
+
+	snd_pcm_hw_params_alloca(&(sc->hwparams));
+
+	if((err = snd_pcm_hw_params_any(sc->pcmhandle,sc->hwparams)) < 0) {
+		printf("Cannot set default hw params\n");
+		return -1;
+	}
+
+	if((err = snd_pcm_hw_params_set_access(sc->pcmhandle,sc->hwparams,SND_PCM_ACCESS_RW_INTERLEAVED))) {
+		return -1;
+		printf("Cannot set access mode to interleaved\n");
+	}
+
+	snd_pcm_hw_params_set_format(sc->pcmhandle,sc->hwparams,sc->bitdepth);
+	
+	snd_pcm_hw_params_set_channels(sc->pcmhandle,sc->hwparams,sc->channels);
+	
+	snd_pcm_hw_params_set_rate_near(sc->pcmhandle, sc->hwparams, &(sc->samplerate), &(sc->dir));
+	
+	snd_pcm_hw_params_set_period_size_near(sc->pcmhandle, sc->hwparams, &(sc->periodsize), &(sc->dir));
+
+	if((err = snd_pcm_hw_params(sc->pcmhandle,sc->hwparams)) < 0) {
+		printf("Can not set hw params\n");
+		return -1;
+	}
+	return 0;
+}
+
 struct signal_config* init_signal_config()
 {
 	struct signal_config* sc = malloc(sizeof(struct signal_config));
@@ -75,15 +148,9 @@ int parse_args(struct signal_config* sc, int argc, char* argv[])
 	return 0;
 }
 
-int capture_audio(int err)
+int playback_audio(struct signal_config* sc, char* buf, int size)
 {
-	err = snd_pcm_readi(sc->pcmhandle,buf,sc->periodsize);
-	//write();
-	return 0;
-}
-
-int playback_audio(struct signal_config* sc, int err, char* buf, int size)
-{
+	int err;
 	err = read(0,buf,size);
 	if(err == 0) {
 		printf("End of file on input\n");
@@ -97,54 +164,15 @@ int playback_audio(struct signal_config* sc, int err, char* buf, int size)
 
 int main(int argc, char* argv[])
 {
-	struct signal_config* sc = init_signal_config();
-		
+	struct signal_config* sc;		
 	int err;
 	char *buf;
-	
+
+	sc = init_signal_config();
 	parse_args(sc,argc,argv);
 
-	if((err = snd_pcm_open(&(sc->pcmhandle), "default", sc->pcmdir, 0)) < 0) {
-		fprintf(stderr,"Cannot open audio device %s\n",snd_strerror(err));
-	} else {
-		printf("pcm is open\n");
-	}
-
-	snd_pcm_hw_params_alloca(&(sc->hwparams));
-
-	if((err = snd_pcm_hw_params_any(sc->pcmhandle,sc->hwparams)) < 0) {
-		printf("Cannot set default hw params\n");
-		return -1;
-	}
-
-	if((err = snd_pcm_hw_params_set_access(sc->pcmhandle,sc->hwparams,SND_PCM_ACCESS_RW_INTERLEAVED))) {
-		printf("Cannot set access mode to interleaved\n");
-	}
-
-	snd_pcm_hw_params_set_format(sc->pcmhandle,sc->hwparams,sc->bitdepth);
-	
-	snd_pcm_hw_params_set_channels(sc->pcmhandle,sc->hwparams,sc->channels);
-	
-	snd_pcm_hw_params_set_rate_near(sc->pcmhandle, sc->hwparams, &(sc->samplerate), &(sc->dir));
-	
-	snd_pcm_hw_params_set_period_size_near(sc->pcmhandle, sc->hwparams, &(sc->periodsize), &(sc->dir));
-
-	if((err = snd_pcm_hw_params(sc->pcmhandle,sc->hwparams)) < 0) {
-		printf("Can not set hw params\n");
-		return -1;
-	}
-
-	snd_pcm_hw_params_get_rate(sc->hwparams,&(sc->samplerate),&(sc->dir));
-	printf("Rate = %d bps\n",sc->samplerate);
-
-	snd_pcm_hw_params_get_periods(sc->hwparams,&(sc->samplerate), &(sc->dir));
-	printf("Periods = %d\n",sc->samplerate);
-
-	snd_pcm_hw_params_get_period_time(sc->hwparams,&(sc->samplerate),&(sc->dir));
-	printf("Period time =  %d microseconds\n",sc->samplerate);
-
-  	snd_pcm_hw_params_get_period_size(sc->hwparams,&(sc->periodsize), &(sc->dir));
-  	printf("period size = %d frames\n", (int)sc->periodsize);
+	configure_alsa(sc);
+	alsa_info(sc);
 	
 	int size = sc->periodsize * 4; /* 2 bytes per sample * 2 channels */
 	buf = malloc(size);
@@ -155,8 +183,11 @@ int main(int argc, char* argv[])
 	
 	while(1) {
 		if(sc->pcmdir == SND_PCM_STREAM_CAPTURE) {
+			if(capture_audio(sc,buf,size) < 0) {
+				exit(1);
+			}
 		} else if(sc->pcmdir == SND_PCM_STREAM_PLAYBACK) {
-			if(playback_audio(sc,err,buf,size) < 0) {
+			if(playback_audio(sc,buf,size) < 0) {
 				exit(1);
 			}
 		}		
@@ -166,8 +197,10 @@ int main(int argc, char* argv[])
 		fprintf(stderr,"Can't drain pcm handle, %s\n",snd_strerror(err));
 		return -1;
 	}
+
 	snd_pcm_close(sc->pcmhandle);
 	free(buf);
 	free(sc);
 	return 0;
 }
+
