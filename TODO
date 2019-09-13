@@ -1,19 +1,5 @@
--p
-Reads from stdin and writes to ALSA buffer
--c
-Reads from ALSA buffer and writes to stdout
-
--f
-Converts input or output to flac 
-
--r=samplerate
--b=bitdepth
--l=channels
-
 TODO
 Update README 
  - description
-Bit depth arg parsing
 Make size of buffer dynamic(131)
-Debug macro
 modify write statement to support capture
