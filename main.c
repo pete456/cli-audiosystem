@@ -1,9 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <unistd.h>
 #include <getopt.h>
-#include <string.h>
 #include <alsa/asoundlib.h>
 
 #define DEFAULT_CHANNELS 2
@@ -11,7 +6,7 @@
 #define DEFAULT_BITDEPTH SND_PCM_FORMAT_S16_LE 
 #define DEFAULT_PERIOD_SIZE 1024;
 
-struct signal_config {
+typedef struct {
 	unsigned int samplerate;
 	snd_pcm_uframes_t periodsize;
 	int channels;
@@ -20,36 +15,29 @@ struct signal_config {
 	snd_pcm_t *pcmhandle;	
 	snd_pcm_hw_params_t *hwparams;
 	int dir;
-};
+} SignalConfig;
 
-struct bit_format {
+typedef struct {
 	snd_pcm_format_t sndvalue;
 	char* inputvalue;
-};
-
-struct bit_format bflist[] = {
-	{ .sndvalue=SND_PCM_FORMAT_S16_LE, .inputvalue="s16le" },
-	{ .sndvalue=SND_PCM_FORMAT_S16_BE, .inputvalue="s16be" },
-	{ .sndvalue=SND_PCM_FORMAT_U16_LE, .inputvalue="u16be" },
-	{ .sndvalue=SND_PCM_FORMAT_U16_BE, .inputvalue="u16be" }
-};
+} BitFormat;
 
 /* Prints out alsa hw params. */
-void alsa_info(struct signal_config* sc);
+void alsa_info(SignalConfig *sc);
 /* Reads from the hw buffer and writes to stdout. */
-int capture_audio(struct signal_config* sc, char* buf, int size);
+int capture_audio(SignalConfig *sc, char *buf, int size);
 /* Populates the alsa hw params struct. */
-int configure_alsa(struct signal_config* sc);
+int configure_alsa(SignalConfig *sc);
 /* Converts the arg passed to a pcm bit format type. */
 snd_pcm_format_t search_pcmformat_from_argbitformat(char *arg);
 /* Fills a new signal_config struct with DEFINE values. */
-struct signal_config* init_signal_config();
+SignalConfig *init_signal_config();
 /* Sets values in signal config struct with values from argv. */
-int parse_args(struct signal_config* sc, int argc, char* argv[]);
+int parse_args(SignalConfig *sc, int argc, char* argv[]);
 /* Reads values from stdin and writes to hardware buffer. */
-int playback_audio(struct signal_config* sc, char* buf, int size);
+int playback_audio(SignalConfig *sc, char *buf, int size);
 
-void alsa_info(struct signal_config* sc)
+void alsa_info(SignalConfig *sc)
 {
 	snd_pcm_hw_params_get_rate(sc->hwparams,&(sc->samplerate),&(sc->dir));
 	printf("Rate = %d bps\n",sc->samplerate);
@@ -67,15 +55,17 @@ void alsa_info(struct signal_config* sc)
 	printf("Buffer Size = %d frames\n",sc->samplerate);
 }
 
-int capture_audio(struct signal_config* sc, char* buf, int size)
+int capture_audio(SignalConfig *sc, char *buf, int size)
 {
 	int err;
-	err = snd_pcm_readi(sc->pcmhandle,buf,sc->periodsize);
-	write(1,buf,size);
+	while(1) {
+		err = snd_pcm_readi(sc->pcmhandle,buf,sc->periodsize);
+		write(1,buf,size);
+	}
 	return 0;
 }
 
-int configure_alsa(struct signal_config* sc)
+int configure_alsa(SignalConfig *sc)
 {
 	int err;
 	if((err = snd_pcm_open(&(sc->pcmhandle), "default", sc->pcmdir, 0)) < 0) {
@@ -110,9 +100,16 @@ int configure_alsa(struct signal_config* sc)
 	return 0;
 }
 
-snd_pcm_format_t search_pcmformat_from_argbitformat(char* arg)
+snd_pcm_format_t search_pcmformat_from_argbitformat(char *arg)
 {
-	for(int i=0; i<sizeof(bflist)/sizeof(struct bit_format); ++i) {
+	BitFormat bflist[] = {
+		{ .sndvalue=SND_PCM_FORMAT_S16_LE, .inputvalue="s16le" },
+		{ .sndvalue=SND_PCM_FORMAT_S16_BE, .inputvalue="s16be" },
+		{ .sndvalue=SND_PCM_FORMAT_U16_LE, .inputvalue="u16be" },
+		{ .sndvalue=SND_PCM_FORMAT_U16_BE, .inputvalue="u16be" }
+	};
+
+	for(int i=0; i<sizeof(bflist)/sizeof(BitFormat); ++i) {
 		if(strcmp(bflist[i].inputvalue,arg)) {
 #ifdef DEBUG
 			printf("Bit Format set too = %s\n",arg);
@@ -123,9 +120,9 @@ snd_pcm_format_t search_pcmformat_from_argbitformat(char* arg)
 	return -1;
 }
 
-struct signal_config* init_signal_config()
+SignalConfig *init_signal_config()
 {
-	struct signal_config* sc = malloc(sizeof(struct signal_config));
+	SignalConfig *sc = malloc(sizeof(SignalConfig));
 	sc->samplerate=DEFAULT_SAMPLE_RATE;
 	sc->periodsize=DEFAULT_PERIOD_SIZE;
 	sc->channels=DEFAULT_CHANNELS;
@@ -133,7 +130,7 @@ struct signal_config* init_signal_config()
 	return sc;
 }
 
-int parse_args(struct signal_config* sc, int argc, char* argv[])
+int parse_args(SignalConfig *sc, int argc, char* argv[])
 {
 	struct option options[] = {
 		{"p",0,0,0},
@@ -184,23 +181,25 @@ int parse_args(struct signal_config* sc, int argc, char* argv[])
 	return 0;
 }
 
-int playback_audio(struct signal_config* sc, char* buf, int size)
+int playback_audio(SignalConfig *sc, char *buf, int size)
 {
 	int err;
-	err = read(0,buf,size);
-	if(err == 0) {
-		printf("End of file on input\n");
-		return -1;
-	} else if(err != size) {
-		printf("Short read: read %d bytes\n",err);
+	while(1) {
+		err = read(0,buf,size);
+		if(err == 0) {
+			printf("End of file on input\n");
+			return -1;
+		} else if(err != size) {
+			printf("Short read: read %d bytes\n",err);
+		}
+		err = snd_pcm_writei(sc->pcmhandle,buf,sc->periodsize);
 	}
-	err = snd_pcm_writei(sc->pcmhandle,buf,sc->periodsize);
 	return 0;
 }
 
 int main(int argc, char* argv[])
 {
-	struct signal_config* sc;		
+	SignalConfig *sc;		
 	int err;
 	char *buf;
 
@@ -212,20 +211,18 @@ int main(int argc, char* argv[])
 	alsa_info(sc);
 #endif	
 
-	int size = sc->periodsize * sc->channels * 2; /* 2 bytes per sample * 2 channels */
+	int size = sc->periodsize * sc->channels * 2; /* 2 bytes per sample */
 	buf = malloc(size);
 		
-	while(1) {
-		if(sc->pcmdir == SND_PCM_STREAM_CAPTURE) {
-			if(capture_audio(sc,buf,size) < 0) {
-				exit(1);
-			}
-		} else if(sc->pcmdir == SND_PCM_STREAM_PLAYBACK) {
-			if(playback_audio(sc,buf,size) < 0) {
-				exit(1);
-			}
-		}		
-	}
+	if(sc->pcmdir == SND_PCM_STREAM_CAPTURE) {
+		if(capture_audio(sc,buf,size) < 0) {
+			exit(1);
+		}
+	} else if(sc->pcmdir == SND_PCM_STREAM_PLAYBACK) {
+		if(playback_audio(sc,buf,size) < 0) {
+			exit(1);
+		}	
+	}		
 	
 	if((err = snd_pcm_drain(sc->pcmhandle)) < 0) {
 		fprintf(stderr,"Can't drain pcm handle, %s\n",snd_strerror(err));
