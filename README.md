@@ -13,8 +13,8 @@ The only file type excepted is .raw.
 - -c Capture
 
 [audio info]
-- --r=samplerate
-- --b=bitformat
+- --r=samplerate(Hz)
+- --b=bitformat(Check Available Bit Formats bellow)
 - --l=channels
 
 ## Available Bit Formats 
@@ -23,8 +23,8 @@ s16be = Signed 16 bit Big Endian
 u16le = Unsigned 16 bit Little Endian 
 u16be = Unsigned 16 bit Big Endian 
 
-##Example
-Playback
+## Example
+### Playback
 ./cli-audiosystem -p --r=41000 --b=s16le --l=2 < audiofile.raw
-Capture
+### Capture
 ./cli-audiosystem -c --r=41000 --b=s16le --l=2 > audiofile.raw
