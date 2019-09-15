@@ -13,16 +13,17 @@ The only file type excepted is .raw.
 - -c Capture
 
 [audio info]
-- --r=samplerate(Hz)
-- --b=bitformat(Check Available Bit Formats bellow)
-- --l=channels
-Default values can be changed in the defaults.h file.
+* --r=samplerate(Hz)
+* --b=bitformat(Check Available Bit Formats bellow)
+* --l=channels
+
+Instead of passing in audio info args, default values can be changed in the defaults.h file.
 
 ## Available Bit Formats 
-s16le = Signed 16 bit Little Endian 
-s16be = Signed 16 bit Big Endian 
-u16le = Unsigned 16 bit Little Endian 
-u16be = Unsigned 16 bit Big Endian 
+* s16le = Signed 16 bit Little Endian 
+* s16be = Signed 16 bit Big Endian 
+* u16le = Unsigned 16 bit Little Endian 
+* u16be = Unsigned 16 bit Big Endian 
 
 ## Example
 ### Playback
