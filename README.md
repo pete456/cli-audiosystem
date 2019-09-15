@@ -16,6 +16,7 @@ The only file type excepted is .raw.
 - --r=samplerate(Hz)
 - --b=bitformat(Check Available Bit Formats bellow)
 - --l=channels
+Default values can be changed in the defaults.h file.
 
 ## Available Bit Formats 
 s16le = Signed 16 bit Little Endian 
