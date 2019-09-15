@@ -20,14 +20,14 @@ void alsa_info(SignalConfig *sc);
 int capture_audio(SignalConfig *sc, char *buf, int size);
 /* Populates the alsa hw params struct. */
 int configure_alsa(SignalConfig *sc);
-/* Converts the arg passed to a pcm bit format type. */
-snd_pcm_format_t search_pcmformat_from_argbitformat(char *arg);
 /* Fills a new signal_config struct with DEFINE values. */
 SignalConfig *init_signal_config();
 /* Sets values in signal config struct with values from argv. */
 int parse_args(SignalConfig *sc, int argc, char* argv[]);
 /* Reads values from stdin and writes to hardware buffer. */
 int playback_audio(SignalConfig *sc, char *buf, int size);
+/* Converts the arg passed to a pcm bit format type. */
+snd_pcm_format_t search_pcmformat_from_argbitformat(char *arg);
 
 void alsa_info(SignalConfig *sc)
 {
@@ -101,28 +101,6 @@ int configure_alsa(SignalConfig *sc)
 		return -1;
 	}
 	return 0;
-}
-
-snd_pcm_format_t search_pcmformat_from_argbitformat(char *arg)
-{
-	struct bitformat{
-		snd_pcm_format_t sndvalue;
-		char* inputvalue;
-	};
-
-	struct bitformat bflist[] = {
-		{ .sndvalue=SND_PCM_FORMAT_S16_LE, .inputvalue="s16le" },
-		{ .sndvalue=SND_PCM_FORMAT_S16_BE, .inputvalue="s16be" },
-		{ .sndvalue=SND_PCM_FORMAT_U16_LE, .inputvalue="u16be" },
-		{ .sndvalue=SND_PCM_FORMAT_U16_BE, .inputvalue="u16be" }
-	};
-
-	for(int i=0; i<sizeof(bflist)/sizeof(struct bitformat); ++i) {
-		if(strcmp(bflist[i].inputvalue,arg)) {
-			return bflist[i].sndvalue;
-		}
-	}
-	return -1;
 }
 
 SignalConfig *init_signal_config()
@@ -206,6 +184,28 @@ int playback_audio(SignalConfig *sc, char *buf, int size)
 		}
 	}
 	return 0;
+}
+
+snd_pcm_format_t search_pcmformat_from_argbitformat(char *arg)
+{
+	struct bitformat{
+		snd_pcm_format_t sndvalue;
+		char* inputvalue;
+	};
+
+	struct bitformat bflist[] = {
+		{ .sndvalue=SND_PCM_FORMAT_S16_LE, .inputvalue="s16le" },
+		{ .sndvalue=SND_PCM_FORMAT_S16_BE, .inputvalue="s16be" },
+		{ .sndvalue=SND_PCM_FORMAT_U16_LE, .inputvalue="u16be" },
+		{ .sndvalue=SND_PCM_FORMAT_U16_BE, .inputvalue="u16be" }
+	};
+
+	for(int i=0; i<sizeof(bflist)/sizeof(struct bitformat); ++i) {
+		if(strcmp(bflist[i].inputvalue,arg)) {
+			return bflist[i].sndvalue;
+		}
+	}
+	return -1;
 }
 
 int main(int argc, char* argv[])
