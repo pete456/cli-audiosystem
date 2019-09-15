@@ -17,11 +17,6 @@ typedef struct {
 	int dir;
 } SignalConfig;
 
-typedef struct {
-	snd_pcm_format_t sndvalue;
-	char* inputvalue;
-} BitFormat;
-
 /* Prints out alsa hw params. */
 void alsa_info(SignalConfig *sc);
 /* Reads from the hw buffer and writes to stdout. */
@@ -40,7 +35,7 @@ int playback_audio(SignalConfig *sc, char *buf, int size);
 void alsa_info(SignalConfig *sc)
 {
 	snd_pcm_hw_params_get_rate(sc->hwparams,&(sc->samplerate),&(sc->dir));
-	printf("Rate = %d bps\n",sc->samplerate);
+	printf("Sample rate: %d bps\n",sc->samplerate);
 
 	snd_pcm_hw_params_get_periods(sc->hwparams,&(sc->samplerate), &(sc->dir));
 	printf("Periods = %d\n",sc->samplerate);
@@ -49,7 +44,7 @@ void alsa_info(SignalConfig *sc)
 	printf("Period time =  %d microseconds\n",sc->samplerate);
 
   	snd_pcm_hw_params_get_period_size(sc->hwparams,&(sc->periodsize), &(sc->dir));
-  	printf("period size = %d frames\n", (int)sc->periodsize);
+  	printf("Period size = %d frames\n", (int)sc->periodsize);
 	
 	snd_pcm_hw_params_get_buffer_size(sc->hwparams,(snd_pcm_uframes_t *)&(sc->samplerate));
 	printf("Buffer Size = %d frames\n",sc->samplerate);
@@ -60,7 +55,18 @@ int capture_audio(SignalConfig *sc, char *buf, int size)
 	int err;
 	while(1) {
 		err = snd_pcm_readi(sc->pcmhandle,buf,sc->periodsize);
-		write(1,buf,size);
+		if(err == -EPIPE) {
+			fprintf(stderr,"Overrun occurred\n");
+			snd_pcm_prepare(sc->pcmhandle);
+		} else if(err < 0) {
+			fprintf(stderr,"Error from read: %s\n", snd_strerror(err));
+		} else if(err != (int)sc->periodsize) {
+			fprintf(stderr,"Short read: read %d frames\n",err);
+		}
+		err = write(1,buf,size);
+		if(err != size) {
+			fprintf(stderr,"Short write: wrote %d bytes\n", err);
+		}
 	}
 	return 0;
 }
@@ -69,20 +75,20 @@ int configure_alsa(SignalConfig *sc)
 {
 	int err;
 	if((err = snd_pcm_open(&(sc->pcmhandle), "default", sc->pcmdir, 0)) < 0) {
-		fprintf(stderr,"Cannot open audio device %s\n",snd_strerror(err));
+		fprintf(stderr,"Error opening audio device %s\n",snd_strerror(err));
 		return -1;
 	}
 
 	snd_pcm_hw_params_alloca(&(sc->hwparams));
 
 	if((err = snd_pcm_hw_params_any(sc->pcmhandle,sc->hwparams)) < 0) {
-		printf("Cannot set default hw params\n");
+		fprintf(stderr,"Error setting default hw params\n");
 		return -1;
 	}
 
 	if((err = snd_pcm_hw_params_set_access(sc->pcmhandle,sc->hwparams,SND_PCM_ACCESS_RW_INTERLEAVED))) {
 		return -1;
-		printf("Cannot set access mode to interleaved\n");
+		fprintf(stderr,"Error setting access mode to interleaved\n");
 	}
 
 	snd_pcm_hw_params_set_format(sc->pcmhandle,sc->hwparams,sc->bitdepth);
@@ -94,7 +100,7 @@ int configure_alsa(SignalConfig *sc)
 	snd_pcm_hw_params_set_period_size_near(sc->pcmhandle, sc->hwparams, &(sc->periodsize), &(sc->dir));
 
 	if((err = snd_pcm_hw_params(sc->pcmhandle,sc->hwparams)) < 0) {
-		printf("Can not set hw params\n");
+		fprintf(stderr,"Cannot set hw params\n");
 		return -1;
 	}
 	return 0;
@@ -102,18 +108,20 @@ int configure_alsa(SignalConfig *sc)
 
 snd_pcm_format_t search_pcmformat_from_argbitformat(char *arg)
 {
-	BitFormat bflist[] = {
+	struct bitformat{
+		snd_pcm_format_t sndvalue;
+		char* inputvalue;
+	};
+
+	struct bitformat bflist[] = {
 		{ .sndvalue=SND_PCM_FORMAT_S16_LE, .inputvalue="s16le" },
 		{ .sndvalue=SND_PCM_FORMAT_S16_BE, .inputvalue="s16be" },
 		{ .sndvalue=SND_PCM_FORMAT_U16_LE, .inputvalue="u16be" },
 		{ .sndvalue=SND_PCM_FORMAT_U16_BE, .inputvalue="u16be" }
 	};
 
-	for(int i=0; i<sizeof(bflist)/sizeof(BitFormat); ++i) {
+	for(int i=0; i<sizeof(bflist)/sizeof(struct bitformat); ++i) {
 		if(strcmp(bflist[i].inputvalue,arg)) {
-#ifdef DEBUG
-			printf("Bit Format set too = %s\n",arg);
-#endif
 			return bflist[i].sndvalue;
 		}
 	}
@@ -133,8 +141,6 @@ SignalConfig *init_signal_config()
 int parse_args(SignalConfig *sc, int argc, char* argv[])
 {
 	struct option options[] = {
-		{"p",0,0,0},
-		{"c",0,0,0},
 		{"r",1,0,'r'},
 		{"b",1,0,'b'},
 		{"l",1,0,'l'}
@@ -143,11 +149,8 @@ int parse_args(SignalConfig *sc, int argc, char* argv[])
 	char c;
 	int err;
 	short int dirset=0; //Each time -c or -p is parsed dirset will increase by 1 
-	while((c = getopt_long(argc,argv,"pcr:b:l:",options,&optionindex)) != -1) {
+	while((c = getopt_long(argc,argv,"cpr:b:l:",options,&optionindex)) != -1) {
 		switch(c) {
-			case 0:
-				printf("Long option = %s\n",options[optionindex].name);
-				break;
 			case 'p':
 				sc->pcmdir=SND_PCM_STREAM_PLAYBACK;
 				dirset++;
@@ -171,6 +174,7 @@ int parse_args(SignalConfig *sc, int argc, char* argv[])
 				exit(1);
 		};
 	}
+	
 	if(dirset == 0) {
 		printf("Must pass -c or -p.\n");
 		exit(1);
@@ -184,15 +188,25 @@ int parse_args(SignalConfig *sc, int argc, char* argv[])
 int playback_audio(SignalConfig *sc, char *buf, int size)
 {
 	int err;
-	while(1) {
-		err = read(0,buf,size);
+	while((err = read(0,buf,size)) != 0) {
 		if(err == 0) {
-			printf("End of file on input\n");
-			return -1;
+			fprintf(stderr, "end of file on input\n");
+			break;
+			printf("what the fuck\n");
 		} else if(err != size) {
-			printf("Short read: read %d bytes\n",err);
+			fprintf(stderr,"short read: read %d bytes\n",err);
 		}
+
 		err = snd_pcm_writei(sc->pcmhandle,buf,sc->periodsize);
+		if(err == -EPIPE) {
+			fprintf(stderr,"underrun occurred\n");
+			snd_pcm_prepare(sc->pcmhandle);
+			return -1;
+		} else if(err < 0) {
+			fprintf(stderr,"error from writei: %s\n",snd_strerror(err));
+		} else if(err != (int)sc->periodsize) {
+			fprintf(stderr,"Short write: written %d frames\n",err);
+		}
 	}
 	return 0;
 }
@@ -210,8 +224,7 @@ int main(int argc, char* argv[])
 #ifdef DEBUG
 	alsa_info(sc);
 #endif	
-
-	int size = sc->periodsize * sc->channels * 2; /* 2 bytes per sample */
+	int size = sc->periodsize * sc->channels * snd_pcm_samples_to_bytes(sc->pcmhandle,1); /* 2 bytes per sample */
 	buf = malloc(size);
 		
 	if(sc->pcmdir == SND_PCM_STREAM_CAPTURE) {
