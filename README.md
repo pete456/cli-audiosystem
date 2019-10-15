@@ -12,7 +12,7 @@ The only file type excepted is .raw.
 - -p Playback
 - -c Capture
 
-[audio info]
+[Audio Info]
 * --r=samplerate(Hz)
 * --b=bitformat(Check Available Bit Formats bellow)
 * --l=channels
@@ -24,6 +24,11 @@ Instead of passing in audio info args, default values can be changed in the defa
 * s16be = Signed 16 bit Big Endian 
 * u16le = Unsigned 16 bit Little Endian 
 * u16be = Unsigned 16 bit Big Endian 
+
+[Input]
+* --f=file
+If --f is excluded program expects stdin, or will write to stdout.
+
 
 ## Example
 ### Playback

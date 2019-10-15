@@ -18,6 +18,7 @@ typedef struct {
 	snd_pcm_t *pcmhandle;	
 	snd_pcm_hw_params_t *hwparams;
 	int dir;
+	char *filename;
 } SignalConfig;
 
 /* Prints out alsa hw params. */
@@ -34,11 +35,12 @@ int capture_audio(SignalConfig *sc, char *buf, int size);
 /* Reads values from stdin and writes to hardware buffer. */
 int playback_audio(SignalConfig *sc, char *buf, int size);
 
-/* Sets values in signal config struct with values from argv. */
-int parse_args(SignalConfig *sc, int argc, char* argv[]);
+/* Sets values in signal config struct with value from argv. */
+int parse_args(SignalConfig *sc, int argc, char *argv[]);
 /* Converts the arg passed to a pcm bit format type. */
 snd_pcm_format_t search_pcmformat_from_argbitformat(char *arg);
 
+#ifdef DEBUG 
 void 
 alsa_info(SignalConfig *sc)
 {
@@ -57,6 +59,7 @@ alsa_info(SignalConfig *sc)
 	snd_pcm_hw_params_get_buffer_size(sc->hwparams,(snd_pcm_uframes_t *)&(sc->samplerate));
 	printf("Buffer Size(frames): %d\n", sc->samplerate);
 }
+#endif /* DEBUG */
 
 int 
 configure_alsa(SignalConfig *sc)
@@ -126,7 +129,11 @@ print_error(char *error_string, int err)
 int 
 capture_audio(SignalConfig *sc, char *buf, int size)
 {
+	int file = 1;
 	int err;
+	if(sc->filename != NULL) {
+		file = open(sc->filename,O_RDWR);
+	}
 	while(1) {
 		err = snd_pcm_readi(sc->pcmhandle,buf,sc->periodsize);
 		if(err == -EPIPE) {
@@ -137,7 +144,7 @@ capture_audio(SignalConfig *sc, char *buf, int size)
 		} else if(err != (int)sc->periodsize) {
 			fprintf(stderr,"Short read: read %d frames\n",err);
 		}
-		err = write(1,buf,size);
+		err = write(file,buf,size);
 		if(err != size) {
 			fprintf(stderr,"Short write: wrote %d bytes\n", err);
 		}
@@ -148,8 +155,12 @@ capture_audio(SignalConfig *sc, char *buf, int size)
 int 
 playback_audio(SignalConfig *sc, char *buf, int size)
 {
+	int file = 0;
 	int err;
-	while((err = read(0,buf,size)) != 0) {
+	if(sc->filename != NULL) {
+		file = open(sc->filename,O_RDWR);
+	}
+	while((err = read(file,buf,size)) != 0) {
 		if(err == 0) {
 			fprintf(stderr, "end of file on input\n");
 			break;
@@ -172,19 +183,23 @@ playback_audio(SignalConfig *sc, char *buf, int size)
 	return 0;
 }
 
-int 
-parse_args(SignalConfig *sc, int argc, char* argv[])
+int parse_args(SignalConfig *sc, int argc, char *argv[])
 {
 	struct option options[] = {
-		{"r",1,0,'r'},
-		{"b",1,0,'b'},
-		{"l",1,0,'l'}
+		{"capture",no_argument,0,'c'},
+		{"playback",no_argument,0,'p'},
+		{"rate",optional_argument,0,'r'},
+		{"bit",optional_argument,0,'b'},
+		{"channels",optional_argument,0,'l'},
+		{"file",required_argument,0,'f'},
+		{0,0,0,0}
 	};
-	int optionindex=0;
+
+	int optionindex = 0;
 	char c;
-	int err;
-	short int dirset=0; //Each time -c or -p is parsed dirset will increase by 1 
-	while((c = getopt_long(argc,argv,"cpr:b:l:",options,&optionindex)) != -1) {
+	int bitdepth;
+	short int dirset = 0; //Each time -c or -p is parsed dirset will increase by 1 
+	while((c = getopt_long(argc,argv,"cpr:b:l:f:",options,&optionindex)) != -1) {
 		switch(c) {
 			case 'p':
 				sc->pcmdir=SND_PCM_STREAM_PLAYBACK;
@@ -198,12 +213,15 @@ parse_args(SignalConfig *sc, int argc, char* argv[])
 				sc->samplerate=atoi(optarg);
 				break;
 			case 'b':
-				if((err = search_pcmformat_from_argbitformat(optarg)) != -1) {
-					sc->bitdepth=err;
+				if((bitdepth = search_pcmformat_from_argbitformat(optarg)) != -1) {
+					sc->bitdepth=bitdepth;
 				}
 				break;
 			case 'l':
 				sc->channels=atoi(optarg);
+				break;
+			case 'f':
+				sc->filename=optarg;
 				break;
 			default:
 				exit(1);
@@ -217,6 +235,7 @@ parse_args(SignalConfig *sc, int argc, char* argv[])
 		printf("Pass only -c or -p.\n");
 		exit(1);
 	}
+	
 	return 0;
 }
 
